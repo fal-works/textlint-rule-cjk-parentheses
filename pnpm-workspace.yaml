@@ -1,0 +1,11 @@
+blockExoticSubdeps: true
+minimumReleaseAge: 4320
+minimumReleaseAgeExclude:
+  - lodash
+overrides:
+  "diff": ">=8.0.3"
+  "lodash": ">=4.18.0"
+  "serialize-javascript": ">=7.0.5"
+strictDepBuilds: true
+trustPolicy: no-downgrade
+trustPolicyIgnoreAfter: 43200
