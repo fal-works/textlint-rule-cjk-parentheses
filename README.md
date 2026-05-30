@@ -7,8 +7,10 @@
 ## インストール
 
 ```sh
-npm install --save-dev textlint @fal-works/textlint-rule-cjk-parentheses
+pnpm add -D textlint @fal-works/textlint-rule-cjk-parentheses
 ```
+
+対応する textlint のバージョンは v15 以上です。
 
 ## 使い方
 

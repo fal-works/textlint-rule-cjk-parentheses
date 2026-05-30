@@ -2,30 +2,53 @@
   "name": "@fal-works/textlint-rule-cjk-parentheses",
   "version": "0.1.0",
   "description": "textlint rule: use （） for CJK content, () for non-CJK content",
-  "type": "module",
-  "main": "src/index.js",
-  "exports": "./src/index.js",
+  "keywords": [
+    "textlintrule",
+    "cjk",
+    "parentheses"
+  ],
+  "homepage": "https://github.com/fal-works/textlint-rule-cjk-parentheses#readme",
+  "bugs": {
+    "url": "https://github.com/fal-works/textlint-rule-cjk-parentheses/issues"
+  },
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/fal-works/textlint-rule-cjk-parentheses.git"
+  },
   "files": [
     "src/",
     "README.md",
     "LICENSE"
   ],
-  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.js"
+  },
   "publishConfig": {
     "access": "public"
   },
-  "engines": {
-    "node": ">=20"
-  },
   "scripts": {
-    "test": "mocha test/index.test.js"
-  },
-  "peerDependencies": {
-    "textlint": ">=15.0.0"
+    "test": "tsc && mocha 'test/**/*.test.js'",
+    "verify": "pnpm audit && pnpm test",
+    "prepublishOnly": "pnpm run verify",
+    "pack:dry-run": "npm pack --dry-run --ignore-scripts --cache tmp/npm-cache"
   },
   "devDependencies": {
-    "textlint": "^15.5.2",
-    "textlint-tester": "^15.5.2",
-    "mocha": "^11.7.5"
+    "@fal-works/textlint-rule-cjk-parentheses": "file:",
+    "@textlint/ast-node-types": "^15.7.1",
+    "@textlint/types": "^15.7.1",
+    "@types/mocha": "^10.0.10",
+    "@types/node": "^22.19.19",
+    "mocha": "^11.7.6",
+    "textlint": "^15.7.1",
+    "textlint-tester": "^15.7.1",
+    "typescript": "^6.0.3"
+  },
+  "peerDependencies": {
+    "textlint": ">=15"
+  },
+  "engines": {
+    "node": ">=22.18"
   }
 }

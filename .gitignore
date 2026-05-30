@@ -1,2 +1,4 @@
 node_modules/
-/local/
+/dev/
+/tmp/
+.codex
