@@ -1,4 +1,4 @@
-# textlint-rule-ja-cjk-brackets
+# textlint-rule-cjk-parentheses
 
 括弧内に CJK 文字（ひらがな・カタカナ・漢字）が含まれる場合は全角括弧 `（）` を、それ以外の場合は半角括弧 `()` を使用することを要求する [textlint](https://textlint.github.io/) ルールです。
 
@@ -7,7 +7,7 @@
 ## インストール
 
 ```sh
-npm install --save-dev textlint @fal-works/textlint-rule-ja-cjk-brackets
+npm install --save-dev textlint @fal-works/textlint-rule-cjk-parentheses
 ```
 
 ## 使い方
@@ -17,7 +17,7 @@ npm install --save-dev textlint @fal-works/textlint-rule-ja-cjk-brackets
 ```json
 {
   "rules": {
-    "@fal-works/ja-cjk-brackets": true
+    "@fal-works/cjk-parentheses": true
   }
 }
 ```

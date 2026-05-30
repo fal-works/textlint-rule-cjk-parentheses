@@ -11,7 +11,7 @@ const e = (msg) => ({ message: msg });
 
 const tester = new TextLintTester();
 
-tester.run("ja-cjk-brackets", rule, {
+tester.run("cjk-parentheses", rule, {
     // ================================================================
     // VALID: 正しい括弧（エラーなし）
     // ================================================================

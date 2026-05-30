@@ -1,5 +1,5 @@
 {
-  "name": "@fal-works/textlint-rule-ja-cjk-brackets",
+  "name": "@fal-works/textlint-rule-cjk-parentheses",
   "version": "0.1.0",
   "description": "textlint rule: use （） for CJK content, () for non-CJK content",
   "type": "module",
