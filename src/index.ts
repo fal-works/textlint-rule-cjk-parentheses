@@ -79,6 +79,7 @@ const HALFWIDTH_CLOSE = ")";
 const FULLWIDTH_MESSAGE = "Use full-width parentheses （） here.";
 const HALFWIDTH_MESSAGE = "Use half-width parentheses () here.";
 const EITHER_WIDTH_MESSAGE = "Unify the parenthesis width to either full-width （） or half-width ().";
+const SPACING_MESSAGE = "Adjust the spacing around this parenthesis.";
 
 const TRANSPARENT_CHARS: ReadonlySet<string> = new Set([" ", "\u3000", "\t", "\u00A0"]);
 
@@ -437,6 +438,9 @@ function closingSideWillAdjust(run: VirtualRun, closeIndex: number, targetChar: 
 /**
  * The gap between a closing parenthesis and the next opening parenthesis is owned by the
  * closing side to avoid producing duplicate insertions or overlapping removals.
+ *
+ * `targetByTokenId` holds an entry only for parentheses belonging to a rewritten pair, so a
+ * missing entry means the closing neighbor's pair is left untouched and will not adjust the gap.
  */
 function shouldSkipOpeningSideAdjustment(
     run: VirtualRun,
@@ -446,7 +450,7 @@ function shouldSkipOpeningSideAdjustment(
     if (!isClosingParenthesis(left.token.char)) return false;
 
     const targetChar = targetByTokenId.get(left.token.id);
-    if (targetChar === undefined || targetChar === left.token.char) return false;
+    if (targetChar === undefined) return false;
 
     return closingSideWillAdjust(run, left.index, targetChar);
 }
@@ -476,9 +480,10 @@ interface OuterSideAdjustmentParams {
 }
 
 /**
- * Computes the outer-side spacing adjustment for a single parenthesis whose width is being
- * changed to `targetChar`. The opening and closing sides are mirror images: the opening side
- * looks left and the closing side looks right, but the spacing policy is identical.
+ * Computes the outer-side spacing adjustment for a single parenthesis whose canonical width is
+ * `targetChar` (which may equal its current width when only the spacing needs to change). The
+ * opening and closing sides are mirror images: the opening side looks left and the closing side
+ * looks right, but the spacing policy is identical.
  */
 function outerSideAdjustment({
     run,
@@ -541,6 +546,12 @@ interface CreateFixParams {
     targetByTokenId: ReadonlyMap<number, string>;
 }
 
+interface CreatedFix {
+    command: TextlintRuleContextFixCommand;
+    /** Whether the fix changes outer-side spacing in addition to (or instead of) the width. */
+    adjustsSpacing: boolean;
+}
+
 /** Whether the source holds an odd-length run of backslashes ending immediately before `index`. */
 function precededByOddBackslashRun(source: string, index: number): boolean {
     let count = 0;
@@ -572,7 +583,7 @@ function createFix({
     source,
     fixer,
     targetByTokenId,
-}: CreateFixParams): TextlintRuleContextFixCommand {
+}: CreateFixParams): CreatedFix {
     const isOpening = isOpeningParenthesis(token.char);
     const neighbor = isOpening
         ? findLeftNeighbor(run, tokenIndex)
@@ -596,7 +607,45 @@ function createFix({
 
     const guardedReplacement = guardAgainstEscape(replacement, source, rangeStart);
 
-    return fixer.replaceTextRange(relativeToBlock(block, [rangeStart, rangeEnd]), guardedReplacement);
+    return {
+        command: fixer.replaceTextRange(relativeToBlock(block, [rangeStart, rangeEnd]), guardedReplacement),
+        adjustsSpacing: adjustment !== undefined,
+    };
+}
+
+interface PairTargets {
+    openTarget: string;
+    closeTarget: string;
+    /** The diagnostic message used when a parenthesis must change width. */
+    widthMessage: string;
+}
+
+/**
+ * Resolves the canonical characters both parentheses of a pair should take under `decision`,
+ * or `undefined` when the pair is already acceptable as written (the `either` cell with a pair
+ * that is already uniform in width).
+ */
+function resolveTargets(pair: ParenthesisPair, decision: WidthDecision): PairTargets | undefined {
+    if (decision === "either") {
+        if (parenthesisWidth(pair.open.char) === parenthesisWidth(pair.close.char)) {
+            return undefined;
+        }
+        return {
+            openTarget: FULLWIDTH_OPEN,
+            closeTarget: FULLWIDTH_CLOSE,
+            widthMessage: EITHER_WIDTH_MESSAGE,
+        };
+    }
+
+    return {
+        openTarget: targetParenthesis(pair.open, decision),
+        closeTarget: targetParenthesis(pair.close, decision),
+        widthMessage: decision === "full" ? FULLWIDTH_MESSAGE : HALFWIDTH_MESSAGE,
+    };
+}
+
+function isPairRewritten(pair: ParenthesisPair, targets: PairTargets): boolean {
+    return pair.open.char !== targets.openTarget || pair.close.char !== targets.closeTarget;
 }
 
 interface CreateReportsForPairParams {
@@ -608,6 +657,13 @@ interface CreateReportsForPairParams {
     source: string;
 }
 
+/**
+ * A pair is normalized as a unit: when any of its parentheses changes width, the whole pair is
+ * brought to its canonical form, including outer-side spacing on both sides. A parenthesis is
+ * reported either because its width is wrong (width message) or, when the pair is being rewritten
+ * anyway, because only its outer spacing needs adjusting (spacing message). A pair whose widths
+ * are already correct is never touched, so spacing is never reported on its own.
+ */
 function createReportsForPair({
     pair,
     decision,
@@ -617,44 +673,34 @@ function createReportsForPair({
     source,
 }: CreateReportsForPairParams): PendingReport[] {
     const { fixer } = context;
+
+    const targets = resolveTargets(pair, decision);
+    if (targets === undefined || !isPairRewritten(pair, targets)) return [];
+
+    const members = [
+        { token: pair.open, tokenIndex: pair.openIndex, targetChar: targets.openTarget },
+        { token: pair.close, tokenIndex: pair.closeIndex, targetChar: targets.closeTarget },
+    ];
+
     const reports: PendingReport[] = [];
-
-    function addReport(
-        token: VirtualChar,
-        tokenIndex: number,
-        targetChar: string,
-        message: string
-    ): void {
-        if (token.char === targetChar) return;
-        reports.push({
+    for (const { token, tokenIndex, targetChar } of members) {
+        const { command, adjustsSpacing } = createFix({
+            block,
+            run: pair.run,
+            tokenIndex,
             token,
-            message,
-            fix: createFix({
-                block,
-                run: pair.run,
-                tokenIndex,
-                token,
-                targetChar,
-                source,
-                fixer,
-                targetByTokenId,
-            }),
+            targetChar,
+            source,
+            fixer,
+            targetByTokenId,
         });
-    }
 
-    if (decision === "either") {
-        if (parenthesisWidth(pair.open.char) === parenthesisWidth(pair.close.char)) {
-            return reports;
+        if (token.char !== targetChar) {
+            reports.push({ token, message: targets.widthMessage, fix: command });
+        } else if (adjustsSpacing) {
+            reports.push({ token, message: SPACING_MESSAGE, fix: command });
         }
-        addReport(pair.open, pair.openIndex, FULLWIDTH_OPEN, EITHER_WIDTH_MESSAGE);
-        addReport(pair.close, pair.closeIndex, FULLWIDTH_CLOSE, EITHER_WIDTH_MESSAGE);
-        return reports;
     }
-
-    const targetWidth = decision;
-    const message = targetWidth === "full" ? FULLWIDTH_MESSAGE : HALFWIDTH_MESSAGE;
-    addReport(pair.open, pair.openIndex, targetParenthesis(pair.open, targetWidth), message);
-    addReport(pair.close, pair.closeIndex, targetParenthesis(pair.close, targetWidth), message);
     return reports;
 }
 
@@ -670,16 +716,11 @@ function processBlock(block: TxtNode, context: RuleContextSubset, mode: RuleMode
         const decision = decideWidth(mode, hasInnerCjk(pair), outerState(pair));
         decisions.push({ pair, decision });
 
-        if (decision === "either") {
-            if (parenthesisWidth(pair.open.char) !== parenthesisWidth(pair.close.char)) {
-                targetByTokenId.set(pair.open.id, FULLWIDTH_OPEN);
-                targetByTokenId.set(pair.close.id, FULLWIDTH_CLOSE);
-            }
-            continue;
-        }
+        const targets = resolveTargets(pair, decision);
+        if (targets === undefined || !isPairRewritten(pair, targets)) continue;
 
-        targetByTokenId.set(pair.open.id, targetParenthesis(pair.open, decision));
-        targetByTokenId.set(pair.close.id, targetParenthesis(pair.close, decision));
+        targetByTokenId.set(pair.open.id, targets.openTarget);
+        targetByTokenId.set(pair.close.id, targets.closeTarget);
     }
 
     const reports = decisions.flatMap(({ pair, decision }) =>

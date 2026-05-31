@@ -8,6 +8,7 @@ const TextLintTester = TextLintTesterModule.default ?? TextLintTesterModule;
 const FULLWIDTH_MESSAGE = "Use full-width parentheses （） here.";
 const HALFWIDTH_MESSAGE = "Use half-width parentheses () here.";
 const EITHER_WIDTH_MESSAGE = "Unify the parenthesis width to either full-width （） or half-width ().";
+const SPACING_MESSAGE = "Adjust the spacing around this parenthesis.";
 
 const NBSP = "\u00A0";
 
@@ -290,6 +291,35 @@ tester.run("cjk-parentheses", rule, {
             errors: [
                 e(HALFWIDTH_MESSAGE, { line: 1, column: 8, range: [7, 8] }),
                 e(HALFWIDTH_MESSAGE, { line: 1, column: 13, range: [12, 13] }),
+            ],
+        },
+        {
+            // Whole-pair normalization: only `（` has the wrong width, but the fix also adds the
+            // missing space after the already-half `)` so the pair ends up consistently spaced.
+            text: "version（2.0)text",
+            output: "version (2.0) text",
+            errors: [
+                e(HALFWIDTH_MESSAGE, { line: 1, column: 8, range: [7, 8] }),
+                e(SPACING_MESSAGE, { line: 1, column: 12, range: [11, 12] }),
+            ],
+        },
+        {
+            text: "The kanji（漢字)means",
+            output: "The kanji (漢字) means",
+            options: { mode: "context" },
+            errors: [e(HALFWIDTH_MESSAGE), e(SPACING_MESSAGE)],
+        },
+        {
+            // Adjacent pairs: the space between `)` and `（` is inserted once, owned by the
+            // closing side, even though that closing parenthesis only needs a spacing fix.
+            text: "A（漢字)（注)B",
+            output: "A (漢字) (注) B",
+            options: { mode: "context" },
+            errors: [
+                e(HALFWIDTH_MESSAGE),
+                e(SPACING_MESSAGE),
+                e(HALFWIDTH_MESSAGE),
+                e(SPACING_MESSAGE),
             ],
         },
     ],

@@ -108,13 +108,18 @@ The outer state determines the target; inner content is relevant only for isolat
 
 ## 5. Reporting and autofix
 
-For `full` and `half`, each parenthesis in a pair is evaluated independently: a parenthesis whose width does not match is reported and fixed.
-For `either`, the pair is evaluated as a unit (§5.2).
-Spacing is adjusted only as part of a width fix and is never reported on its own.
+A pair is normalized as a unit.
+When at least one of its parentheses must change width, the whole pair is brought to its canonical form: each parenthesis is set to its target width, and the outer-side spacing on **both** sides is adjusted (§5.1).
+A pair whose parentheses already have their target widths is left untouched, so spacing is never reported on its own.
+
+Each parenthesis the fix touches is reported at its own position:
+
+- A parenthesis whose width is wrong carries the width message (`full` or `half`), or the unify message in the `either` cell (§5.2).
+- A parenthesis whose width is already correct but whose outer spacing changes carries the spacing message.
 
 ### 5.1 Outer-side spacing
 
-When a fix changes a parenthesis's width, the spacing on its **outer side** (left of an opening parenthesis, right of a closing parenthesis) is also adjusted, provided that side has a neighbor (§3.5).
+When a pair is normalized (§5), the spacing on the **outer side** of each parenthesis (left of an opening parenthesis, right of a closing parenthesis) is adjusted, provided that side has a neighbor (§3.5).
 A side with no neighbor is left unchanged.
 Inner-side spacing is never modified.
 
@@ -138,7 +143,7 @@ For example, `version（2.0\）` is fixed to `version (2.0\\)`, not `version (2.
 ### 5.2 The `either` cell
 
 The `either` cell (mode `content`, outer CJK, no inner CJK) accepts any same-width pair: `(source)` or `（source）`.
-A mixed-width pair is resolved to full-width: only the differing parenthesis is reported and fixed.
+A mixed-width pair is resolved to full-width and normalized as a unit (§5).
 
 ## 6. Examples
 
@@ -149,6 +154,7 @@ A mixed-width pair is resolved to full-width: only the differing parenthesis is 
 | `これはソース（source)です` | CJK | none | `これはソース（source）です` | `これはソース（source）です` |
 | `The kanji（漢字）means` | non-CJK | CJK | `The kanji（漢字）means` | `The kanji (漢字) means` |
 | `version (2.0)` | non-CJK | none | `version (2.0)` | `version (2.0)` |
+| `version（2.0)text` | non-CJK | none | `version (2.0) text` | `version (2.0) text` |
 | `(注)` (alone) | isolated | CJK | `（注）` | `（注）` |
 | `(123)` (alone) | isolated | none | `(123)` | `(123)` |
 | `名称\(めいしょう\)` | excluded | excluded | accepted as is | accepted as is |
