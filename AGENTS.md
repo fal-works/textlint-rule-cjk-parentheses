@@ -2,8 +2,9 @@
 
 ## Project structure
 
-- `src/`: The textlint rule itself, also included in the npm package.
+- `src/`: The textlint rule itself (TypeScript).
 - `test/`: Tests using `textlint-tester` (Mocha-based).
+- `dist/`: Compiled JavaScript shipped as the npm package (gitignored).
 
 ## Work status and other development management
 
@@ -13,16 +14,22 @@
 ## Tech stack
 
 - Node.js (dev: v24+, support: v22+)
-- TypeScript (v6+) (type-checking JS via JSDoc + `checkJs`)
+- TypeScript (v6+)
 - `textlint` (v15+)
 - Test runner: Mocha (because `textlint-tester` is Mocha-based)
 - Package manager: pnpm
 
+## TypeScript configuration
+
+- `tsconfig.json`: project-wide type-checking, no emit.
+- `tsconfig.build.json`: emits `dist/` from `src/` only.
+
 ## npm scripts
 
 - `pnpm test`: Type-check (`tsc`) -> run Mocha tests.
-- `pnpm run verify`: `pnpm audit` -> `pnpm test`.
-- `pnpm run pack:dry-run`: A manual pre-publish command that shows the contents of `npm pack`.
+- `pnpm run build`: Emit `dist/` for publishing.
+- `pnpm run verify`: audit -> test -> build. Also run in CI.
+- `pnpm run pack:dry-run`: Build, then show the contents of `npm pack`.
 
 ## Handling of temporary files
 

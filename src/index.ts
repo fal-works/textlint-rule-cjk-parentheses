@@ -1,74 +1,67 @@
-/**
- * @import {
- *   TextlintFixableRuleModule,
- *   TextlintRuleContext,
- *   TextlintRuleContextFixCommand,
- *   TextlintRuleReportHandler,
- * } from "@textlint/types"
- * @import { TxtNode } from "@textlint/ast-node-types"
- */
+import type { TxtNode } from "@textlint/ast-node-types";
+import type {
+    TextlintFixableRuleModule,
+    TextlintRuleContext,
+    TextlintRuleContextFixCommand,
+    TextlintRuleReportHandler,
+} from "@textlint/types";
 
-/** @typedef {"content" | "context"} RuleMode */
+type RuleMode = "content" | "context";
 
-/**
- * @typedef {object} RuleOptions
- * @property {RuleMode} [mode]
- */
+interface RuleOptions {
+    mode?: RuleMode;
+}
 
-/** @typedef {"full" | "half" | "either"} WidthDecision */
+type ParenthesisWidth = "full" | "half";
 
-/**
- * @typedef {object} SourceRange
- * @property {number} start
- * @property {number} end
- */
+type WidthDecision = ParenthesisWidth | "either";
 
-/**
- * @typedef {object} SourceEdit
- * @property {number} start
- * @property {number} end
- * @property {string} text
- */
+type OuterState = "cjk" | "non-cjk" | "isolated";
 
-/**
- * @typedef {object} VirtualChar
- * @property {number} id
- * @property {string} char
- * @property {number} sourceStart
- * @property {number} sourceEnd
- * @property {readonly SourceRange[]} ancestors
- */
+interface SourceRange {
+    start: number;
+    end: number;
+}
 
-/** @typedef {VirtualChar[]} VirtualRun */
+interface SourceEdit {
+    start: number;
+    end: number;
+    text: string;
+}
 
-/**
- * @typedef {object} IndexedVirtualChar
- * @property {VirtualChar} token
- * @property {number} index
- */
+interface VirtualChar {
+    id: number;
+    char: string;
+    sourceStart: number;
+    sourceEnd: number;
+    ancestors: readonly SourceRange[];
+}
 
-/**
- * @typedef {object} ParenthesisPair
- * @property {VirtualRun} run
- * @property {number} openIndex
- * @property {number} closeIndex
- * @property {VirtualChar} open
- * @property {VirtualChar} close
- */
+type VirtualRun = VirtualChar[];
 
-/**
- * @typedef {object} PendingReport
- * @property {VirtualChar} token
- * @property {string} message
- * @property {TextlintRuleContextFixCommand} fix
- */
+interface IndexedVirtualChar {
+    token: VirtualChar;
+    index: number;
+}
 
-/**
- * @typedef {Pick<
- *   TextlintRuleContext,
- *   "Syntax" | "RuleError" | "fixer" | "getSource" | "locator" | "report"
- * >} RuleContextSubset
- */
+interface ParenthesisPair {
+    run: VirtualRun;
+    openIndex: number;
+    closeIndex: number;
+    open: VirtualChar;
+    close: VirtualChar;
+}
+
+interface PendingReport {
+    token: VirtualChar;
+    message: string;
+    fix: TextlintRuleContextFixCommand;
+}
+
+type RuleContextSubset = Pick<
+    TextlintRuleContext,
+    "Syntax" | "RuleError" | "fixer" | "getSource" | "locator" | "report"
+>;
 
 const BASE_CJK_PATTERN = /[\p{scx=Han}\p{scx=Hiragana}\p{scx=Katakana}！-｠￠-￦]/u;
 const OPENING_SPACE_EXCEPTION_PATTERN = /[\p{gc=Ps}\p{gc=Pi}]/u;
@@ -84,128 +77,77 @@ const FULLWIDTH_MESSAGE = "Use full-width parentheses （） here.";
 const HALFWIDTH_MESSAGE = "Use half-width parentheses () here.";
 const EITHER_WIDTH_MESSAGE = "Unify the parenthesis width to either full-width （） or half-width ().";
 
-/** @type {ReadonlySet<string>} */
-const TRANSPARENT_CHARS = new Set([" ", "\u3000", "\t", "\u00A0"]);
+const TRANSPARENT_CHARS: ReadonlySet<string> = new Set([" ", "\u3000", "\t", "\u00A0"]);
 
-/** @type {ReadonlySet<string>} */
-const CLOSING_HALF_SPACE_EXCEPTION_CHARS = new Set([".", ",", ";", ":", "!", "?", "…"]);
+const CLOSING_HALF_SPACE_EXCEPTION_CHARS: ReadonlySet<string> = new Set([
+    ".",
+    ",",
+    ";",
+    ":",
+    "!",
+    "?",
+    "…",
+]);
 
-/**
- * @param {RuleOptions | undefined} options
- * @returns {RuleMode}
- */
-function normalizeMode(options) {
+function normalizeMode(options: RuleOptions | undefined): RuleMode {
     const mode = options?.mode === undefined ? "content" : options.mode;
     if (mode === "content" || mode === "context") return mode;
 
     throw new Error(`Invalid mode option: ${String(mode)}. Expected "content" or "context".`);
 }
 
-/**
- * @param {TxtNode} node
- * @returns {readonly TxtNode[]}
- */
-function childrenOf(node) {
-    return /** @type {{ readonly children?: readonly TxtNode[] }} */ (node).children ?? [];
+function childrenOf(node: TxtNode): readonly TxtNode[] {
+    return (node as { readonly children?: readonly TxtNode[] }).children ?? [];
 }
 
-/**
- * @param {TxtNode} node
- * @returns {SourceRange}
- */
-function rangeOf(node) {
+function rangeOf(node: TxtNode): SourceRange {
     return { start: node.range[0], end: node.range[1] };
 }
 
-/**
- * @param {string} char
- * @returns {boolean}
- */
-function isRunBoundary(char) {
+function isRunBoundary(char: string): boolean {
     return char === "\n" || char === "\r" || char === "\u2028" || char === "\u2029";
 }
 
-/**
- * @param {string} char
- * @returns {boolean}
- */
-function isTransparent(char) {
+function isTransparent(char: string): boolean {
     return TRANSPARENT_CHARS.has(char);
 }
 
-/**
- * @param {string} char
- * @returns {boolean}
- */
-function isOpeningParenthesis(char) {
+function isOpeningParenthesis(char: string): boolean {
     return char === HALFWIDTH_OPEN || char === FULLWIDTH_OPEN;
 }
 
-/**
- * @param {string} char
- * @returns {boolean}
- */
-function isClosingParenthesis(char) {
+function isClosingParenthesis(char: string): boolean {
     return char === HALFWIDTH_CLOSE || char === FULLWIDTH_CLOSE;
 }
 
-/**
- * @param {string} char
- * @returns {boolean}
- */
-function isInScopeParenthesis(char) {
+function isInScopeParenthesis(char: string): boolean {
     return isOpeningParenthesis(char) || isClosingParenthesis(char);
 }
 
-/**
- * @param {string} char
- * @returns {boolean}
- */
-function isCjk(char) {
+function isCjk(char: string): boolean {
     return BASE_CJK_PATTERN.test(char) && !isInScopeParenthesis(char);
 }
 
-/**
- * @param {string} char
- * @returns {"full" | "half"}
- */
-function parenthesisWidth(char) {
+function parenthesisWidth(char: string): ParenthesisWidth {
     return char === FULLWIDTH_OPEN || char === FULLWIDTH_CLOSE ? "full" : "half";
 }
 
-/**
- * @param {VirtualChar} token
- * @param {"full" | "half"} width
- * @returns {string}
- */
-function targetParenthesis(token, width) {
+function targetParenthesis(token: VirtualChar, width: ParenthesisWidth): string {
     if (isOpeningParenthesis(token.char)) {
         return width === "full" ? FULLWIDTH_OPEN : HALFWIDTH_OPEN;
     }
     return width === "full" ? FULLWIDTH_CLOSE : HALFWIDTH_CLOSE;
 }
 
-/**
- * @param {string} char
- * @returns {boolean}
- */
-function isStraightQuote(char) {
+function isStraightQuote(char: string): boolean {
     return char === '"' || char === "'";
 }
 
-/**
- * @param {string} leftNeighbor
- * @returns {boolean}
- */
-function shouldOmitSpaceBeforeHalfWidthOpening(leftNeighbor) {
+function shouldOmitSpaceBeforeHalfWidthOpening(leftNeighbor: string): boolean {
     return isStraightQuote(leftNeighbor) || OPENING_SPACE_EXCEPTION_PATTERN.test(leftNeighbor);
 }
 
-/**
- * @param {string} rightNeighbor
- * @returns {boolean}
- */
-function shouldOmitSpaceAfterHalfWidthClosing(rightNeighbor) {
+function shouldOmitSpaceAfterHalfWidthClosing(rightNeighbor: string): boolean {
     return (
         isStraightQuote(rightNeighbor) ||
         CLOSING_SPACE_EXCEPTION_PATTERN.test(rightNeighbor) ||
@@ -213,21 +155,12 @@ function shouldOmitSpaceAfterHalfWidthClosing(rightNeighbor) {
     );
 }
 
-/**
- * @param {TxtNode} block
- * @param {RuleContextSubset} context
- * @returns {VirtualRun[]}
- */
-function buildRuns(block, context) {
+function buildRuns(block: TxtNode, context: RuleContextSubset): VirtualRun[] {
     const { Syntax, getSource } = context;
-    /** @type {VirtualRun[]} */
-    const runs = [[]];
+    const runs: VirtualRun[] = [[]];
     let nextId = 0;
 
-    /**
-     * @returns {VirtualRun}
-     */
-    function currentRun() {
+    function currentRun(): VirtualRun {
         const run = runs[runs.length - 1];
         if (run === undefined) {
             throw new Error("Expected at least one virtual run.");
@@ -235,19 +168,18 @@ function buildRuns(block, context) {
         return run;
     }
 
-    function splitRun() {
+    function splitRun(): void {
         if (currentRun().length > 0) {
             runs.push([]);
         }
     }
 
-    /**
-     * @param {string} char
-     * @param {number} sourceStart
-     * @param {number} sourceEnd
-     * @param {readonly SourceRange[]} ancestors
-     */
-    function appendToken(char, sourceStart, sourceEnd, ancestors) {
+    function appendToken(
+        char: string,
+        sourceStart: number,
+        sourceEnd: number,
+        ancestors: readonly SourceRange[]
+    ): void {
         currentRun().push({
             id: nextId,
             char,
@@ -258,11 +190,7 @@ function buildRuns(block, context) {
         nextId += 1;
     }
 
-    /**
-     * @param {TxtNode} node
-     * @param {readonly SourceRange[]} ancestors
-     */
-    function visit(node, ancestors) {
+    function visit(node: TxtNode, ancestors: readonly SourceRange[]): void {
         if (node.type === Syntax.Str) {
             const source = getSource(node);
             let sourceIndex = node.range[0];
@@ -300,15 +228,9 @@ function buildRuns(block, context) {
     return runs.filter((run) => run.length > 0);
 }
 
-/**
- * @param {VirtualRun} run
- * @returns {ParenthesisPair[]}
- */
-function findPairs(run) {
-    /** @type {number[]} */
-    const stack = [];
-    /** @type {ParenthesisPair[]} */
-    const pairs = [];
+function findPairs(run: VirtualRun): ParenthesisPair[] {
+    const stack: number[] = [];
+    const pairs: ParenthesisPair[] = [];
 
     for (let index = 0; index < run.length; index += 1) {
         const token = run[index];
@@ -339,12 +261,7 @@ function findPairs(run) {
     return pairs;
 }
 
-/**
- * @param {VirtualRun} run
- * @param {number} index
- * @returns {IndexedVirtualChar | undefined}
- */
-function findLeftNeighbor(run, index) {
+function findLeftNeighbor(run: VirtualRun, index: number): IndexedVirtualChar | undefined {
     for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
         const token = run[cursor];
         if (token !== undefined && !isTransparent(token.char)) {
@@ -354,12 +271,7 @@ function findLeftNeighbor(run, index) {
     return undefined;
 }
 
-/**
- * @param {VirtualRun} run
- * @param {number} index
- * @returns {IndexedVirtualChar | undefined}
- */
-function findRightNeighbor(run, index) {
+function findRightNeighbor(run: VirtualRun, index: number): IndexedVirtualChar | undefined {
     for (let cursor = index + 1; cursor < run.length; cursor += 1) {
         const token = run[cursor];
         if (token !== undefined && !isTransparent(token.char)) {
@@ -369,14 +281,8 @@ function findRightNeighbor(run, index) {
     return undefined;
 }
 
-/**
- * @param {VirtualRun} run
- * @param {number} start
- * @param {number} end
- * @returns {VirtualChar[]}
- */
-function transparentTokensBetween(run, start, end) {
-    const result = [];
+function transparentTokensBetween(run: VirtualRun, start: number, end: number): VirtualChar[] {
+    const result: VirtualChar[] = [];
     for (let index = start; index < end; index += 1) {
         const token = run[index];
         if (token !== undefined && isTransparent(token.char)) {
@@ -386,19 +292,11 @@ function transparentTokensBetween(run, start, end) {
     return result;
 }
 
-/**
- * @param {readonly VirtualChar[]} tokens
- * @returns {SourceEdit[]}
- */
-function createDeletionEdits(tokens) {
+function createDeletionEdits(tokens: readonly VirtualChar[]): SourceEdit[] {
     return tokens.map((token) => ({ start: token.sourceStart, end: token.sourceEnd, text: "" }));
 }
 
-/**
- * @param {ParenthesisPair} pair
- * @returns {boolean}
- */
-function hasInnerCjk(pair) {
+function hasInnerCjk(pair: ParenthesisPair): boolean {
     for (let index = pair.openIndex + 1; index < pair.closeIndex; index += 1) {
         const token = pair.run[index];
         if (token !== undefined && isCjk(token.char)) {
@@ -408,11 +306,7 @@ function hasInnerCjk(pair) {
     return false;
 }
 
-/**
- * @param {ParenthesisPair} pair
- * @returns {"cjk" | "non-cjk" | "isolated"}
- */
-function outerState(pair) {
+function outerState(pair: ParenthesisPair): OuterState {
     const left = findLeftNeighbor(pair.run, pair.openIndex);
     const right = findRightNeighbor(pair.run, pair.closeIndex);
 
@@ -422,13 +316,7 @@ function outerState(pair) {
     return "isolated";
 }
 
-/**
- * @param {RuleMode} mode
- * @param {boolean} innerCjk
- * @param {"cjk" | "non-cjk" | "isolated"} outer
- * @returns {WidthDecision}
- */
-function decideWidth(mode, innerCjk, outer) {
+function decideWidth(mode: RuleMode, innerCjk: boolean, outer: OuterState): WidthDecision {
     if (mode === "context") {
         if (outer === "cjk") return "full";
         if (outer === "non-cjk") return "half";
@@ -440,14 +328,12 @@ function decideWidth(mode, innerCjk, outer) {
     return "half";
 }
 
-/**
- * @param {string} source
- * @param {number} rangeStart
- * @param {number} rangeEnd
- * @param {SourceEdit[]} edits
- * @returns {string | undefined}
- */
-function applyEditsToSourceSlice(source, rangeStart, rangeEnd, edits) {
+function applyEditsToSourceSlice(
+    source: string,
+    rangeStart: number,
+    rangeEnd: number,
+    edits: SourceEdit[]
+): string | undefined {
     let cursor = rangeStart;
     let result = "";
     const sortedEdits = [...edits].sort((a, b) => a.start - b.start || a.end - b.end);
@@ -470,12 +356,7 @@ function applyEditsToSourceSlice(source, rangeStart, rangeEnd, edits) {
     return result;
 }
 
-/**
- * @param {VirtualChar} left
- * @param {VirtualChar} right
- * @returns {number}
- */
-function insertionPointBetween(left, right) {
+function insertionPointBetween(left: VirtualChar, right: VirtualChar): number {
     let afterLeftSyntax = left.sourceEnd;
     for (const range of left.ancestors) {
         if (range.end > afterLeftSyntax && range.end <= right.sourceStart) {
@@ -496,13 +377,7 @@ function insertionPointBetween(left, right) {
     return right.sourceStart;
 }
 
-/**
- * @param {VirtualRun} run
- * @param {number} closeIndex
- * @param {string} targetChar
- * @returns {boolean}
- */
-function closingSideWillAdjust(run, closeIndex, targetChar) {
+function closingSideWillAdjust(run: VirtualRun, closeIndex: number, targetChar: string): boolean {
     const right = findRightNeighbor(run, closeIndex);
     if (right === undefined) return false;
 
@@ -525,13 +400,12 @@ function closingSideWillAdjust(run, closeIndex, targetChar) {
 /**
  * The gap between a closing parenthesis and the next opening parenthesis is owned by the
  * closing side to avoid producing duplicate insertions or overlapping removals.
- *
- * @param {VirtualRun} run
- * @param {IndexedVirtualChar} left
- * @param {ReadonlyMap<number, string>} targetByTokenId
- * @returns {boolean}
  */
-function shouldSkipOpeningSideAdjustment(run, left, targetByTokenId) {
+function shouldSkipOpeningSideAdjustment(
+    run: VirtualRun,
+    left: IndexedVirtualChar,
+    targetByTokenId: ReadonlyMap<number, string>
+): boolean {
     if (!isClosingParenthesis(left.token.char)) return false;
 
     const targetChar = targetByTokenId.get(left.token.id);
@@ -540,43 +414,48 @@ function shouldSkipOpeningSideAdjustment(run, left, targetByTokenId) {
     return closingSideWillAdjust(run, left.index, targetChar);
 }
 
-/**
- * @param {TxtNode} block
- * @param {readonly [number, number]} absoluteRange
- * @returns {readonly [number, number]}
- */
-function relativeToBlock(block, absoluteRange) {
+function relativeToBlock(
+    block: TxtNode,
+    absoluteRange: readonly [number, number]
+): readonly [number, number] {
     const blockStart = block.range[0];
     return [absoluteRange[0] - blockStart, absoluteRange[1] - blockStart];
 }
 
-/**
- * @typedef {object} SideAdjustment
- * @property {number} rangeStart
- * @property {number} rangeEnd
- * @property {string} replacement
- */
+interface SideAdjustment {
+    rangeStart: number;
+    rangeEnd: number;
+    replacement: string;
+}
+
+interface OuterSideAdjustmentParams {
+    run: VirtualRun;
+    tokenIndex: number;
+    token: VirtualChar;
+    neighbor: IndexedVirtualChar;
+    isOpening: boolean;
+    targetChar: string;
+    source: string;
+}
 
 /**
  * Computes the outer-side spacing adjustment for a single parenthesis whose width is being
  * changed to `targetChar`. The opening and closing sides are mirror images: the opening side
  * looks left and the closing side looks right, but the spacing policy is identical.
- *
- * @param {object} params
- * @param {VirtualRun} params.run
- * @param {number} params.tokenIndex
- * @param {VirtualChar} params.token
- * @param {IndexedVirtualChar} params.neighbor
- * @param {boolean} params.isOpening
- * @param {string} params.targetChar
- * @param {string} params.source
- * @returns {SideAdjustment | undefined}
  */
-function outerSideAdjustment({ run, tokenIndex, token, neighbor, isOpening, targetChar, source }) {
+function outerSideAdjustment({
+    run,
+    tokenIndex,
+    token,
+    neighbor,
+    isOpening,
+    targetChar,
+    source,
+}: OuterSideAdjustmentParams): SideAdjustment | undefined {
     const transparent = isOpening
         ? transparentTokensBetween(run, neighbor.index + 1, tokenIndex)
         : transparentTokensBetween(run, tokenIndex + 1, neighbor.index);
-    const parenEdit = { start: token.sourceStart, end: token.sourceEnd, text: targetChar };
+    const parenEdit: SourceEdit = { start: token.sourceStart, end: token.sourceEnd, text: targetChar };
 
     if (parenthesisWidth(targetChar) === "full") {
         if (transparent.length === 0) return undefined;
@@ -614,19 +493,27 @@ function outerSideAdjustment({ run, tokenIndex, token, neighbor, isOpening, targ
     };
 }
 
-/**
- * @param {object} params
- * @param {TxtNode} params.block
- * @param {VirtualRun} params.run
- * @param {number} params.tokenIndex
- * @param {VirtualChar} params.token
- * @param {string} params.targetChar
- * @param {string} params.source
- * @param {TextlintRuleContext["fixer"]} params.fixer
- * @param {ReadonlyMap<number, string>} params.targetByTokenId
- * @returns {TextlintRuleContextFixCommand}
- */
-function createFix({ block, run, tokenIndex, token, targetChar, source, fixer, targetByTokenId }) {
+interface CreateFixParams {
+    block: TxtNode;
+    run: VirtualRun;
+    tokenIndex: number;
+    token: VirtualChar;
+    targetChar: string;
+    source: string;
+    fixer: TextlintRuleContext["fixer"];
+    targetByTokenId: ReadonlyMap<number, string>;
+}
+
+function createFix({
+    block,
+    run,
+    tokenIndex,
+    token,
+    targetChar,
+    source,
+    fixer,
+    targetByTokenId,
+}: CreateFixParams): TextlintRuleContextFixCommand {
     const isOpening = isOpeningParenthesis(token.char);
     const neighbor = isOpening
         ? findLeftNeighbor(run, tokenIndex)
@@ -651,28 +538,32 @@ function createFix({ block, run, tokenIndex, token, targetChar, source, fixer, t
     return fixer.replaceTextRange(relativeToBlock(block, [rangeStart, rangeEnd]), replacement);
 }
 
-/**
- * @param {object} params
- * @param {ParenthesisPair} params.pair
- * @param {WidthDecision} params.decision
- * @param {ReadonlyMap<number, string>} params.targetByTokenId
- * @param {TxtNode} params.block
- * @param {RuleContextSubset} params.context
- * @param {string} params.source
- * @returns {PendingReport[]}
- */
-function createReportsForPair({ pair, decision, targetByTokenId, block, context, source }) {
-    const { fixer } = context;
-    /** @type {PendingReport[]} */
-    const reports = [];
+interface CreateReportsForPairParams {
+    pair: ParenthesisPair;
+    decision: WidthDecision;
+    targetByTokenId: ReadonlyMap<number, string>;
+    block: TxtNode;
+    context: RuleContextSubset;
+    source: string;
+}
 
-    /**
-     * @param {VirtualChar} token
-     * @param {number} tokenIndex
-     * @param {string} targetChar
-     * @param {string} message
-     */
-    function addReport(token, tokenIndex, targetChar, message) {
+function createReportsForPair({
+    pair,
+    decision,
+    targetByTokenId,
+    block,
+    context,
+    source,
+}: CreateReportsForPairParams): PendingReport[] {
+    const { fixer } = context;
+    const reports: PendingReport[] = [];
+
+    function addReport(
+        token: VirtualChar,
+        tokenIndex: number,
+        targetChar: string,
+        message: string
+    ): void {
         if (token.char === targetChar) return;
         reports.push({
             token,
@@ -706,20 +597,13 @@ function createReportsForPair({ pair, decision, targetByTokenId, block, context,
     return reports;
 }
 
-/**
- * @param {TxtNode} block
- * @param {RuleContextSubset} context
- * @param {RuleMode} mode
- */
-function processBlock(block, context, mode) {
+function processBlock(block: TxtNode, context: RuleContextSubset, mode: RuleMode): void {
     const { RuleError, locator, report, getSource } = context;
     const source = getSource();
     const runs = buildRuns(block, context);
     const pairs = runs.flatMap((run) => findPairs(run));
-    /** @type {Map<number, string>} */
-    const targetByTokenId = new Map();
-    /** @type {{ pair: ParenthesisPair, decision: WidthDecision }[]} */
-    const decisions = [];
+    const targetByTokenId = new Map<number, string>();
+    const decisions: { pair: ParenthesisPair; decision: WidthDecision }[] = [];
 
     for (const pair of pairs) {
         const decision = decideWidth(mode, hasInnerCjk(pair), outerState(pair));
@@ -747,26 +631,24 @@ function processBlock(block, context, mode) {
         report(
             block,
             new RuleError(pending.message, {
-                padding: locator.range(relativeToBlock(block, [pending.token.sourceStart, pending.token.sourceEnd])),
+                padding: locator.range(
+                    relativeToBlock(block, [pending.token.sourceStart, pending.token.sourceEnd])
+                ),
                 fix: pending.fix,
             })
         );
     }
 }
 
-/**
- * @param {TextlintRuleContext} context
- * @param {RuleOptions} [options]
- * @returns {TextlintRuleReportHandler}
- */
-const reporter = (context, options) => {
+const reporter = (
+    context: TextlintRuleContext,
+    options?: RuleOptions
+): TextlintRuleReportHandler => {
     const mode = normalizeMode(options);
     const { Syntax, report, RuleError, fixer, getSource, locator } = context;
-    /** @type {RuleContextSubset} */
-    const contextSubset = { Syntax, report, RuleError, fixer, getSource, locator };
+    const contextSubset: RuleContextSubset = { Syntax, report, RuleError, fixer, getSource, locator };
 
-    /** @param {TxtNode} node */
-    const process = (node) => {
+    const process = (node: TxtNode): void => {
         processBlock(node, contextSubset, mode);
     };
 
@@ -777,5 +659,6 @@ const reporter = (context, options) => {
     };
 };
 
-/** @type {TextlintFixableRuleModule<RuleOptions>} */
-export default { linter: reporter, fixer: reporter };
+const rule: TextlintFixableRuleModule<RuleOptions> = { linter: reporter, fixer: reporter };
+
+export default rule;

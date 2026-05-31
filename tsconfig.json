@@ -4,8 +4,6 @@
     "target": "esnext",
     "lib": ["esnext"],
     "types": ["node", "mocha"],
-    "allowJs": true,
-    "checkJs": true,
     "noEmit": true,
     "allowImportingTsExtensions": true,
     "strict": true,
@@ -14,5 +12,5 @@
     "moduleDetection": "force",
     "skipLibCheck": true
   },
-  "exclude": ["node_modules", "tmp", "dev"]
+  "exclude": ["node_modules", "dist", "tmp", "dev"]
 }

@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
 import TextLintTesterModule from "textlint-tester";
-const TextLintTester = TextLintTesterModule.default ?? TextLintTesterModule;
 
-import rule from "../src/index.js";
+import rule from "../src/index.ts";
+
+const TextLintTester = TextLintTesterModule.default ?? TextLintTesterModule;
 
 const FULLWIDTH_MESSAGE = "Use full-width parentheses （） here.";
 const HALFWIDTH_MESSAGE = "Use half-width parentheses () here.";
@@ -10,14 +11,18 @@ const EITHER_WIDTH_MESSAGE = "Unify the parenthesis width to either full-width �
 
 const NBSP = "\u00A0";
 
+interface ErrorPosition {
+    line?: number;
+    column?: number;
+    range?: [number, number];
+}
+
 /**
- * @param {string} message
- * @param {{ line?: number, column?: number, range?: [number, number] }} [position]
- *   When provided, the listed fields are asserted in addition to the message.
- *   `textlint-tester` only checks the fields present on the expected error object,
- *   so omitting `position` keeps a message-only assertion.
+ * Builds an expected error entry. When `position` is provided, the listed fields are asserted
+ * in addition to the message. `textlint-tester` only checks the fields present on the expected
+ * error object, so omitting `position` keeps a message-only assertion.
  */
-const e = (message, position) => ({ message, ...position });
+const e = (message: string, position?: ErrorPosition) => ({ message, ...position });
 
 const tester = new TextLintTester();
 
@@ -258,8 +263,8 @@ tester.run("cjk-parentheses", rule, {
 
 describe("options", () => {
     it("throws for an invalid mode", () => {
-        const context = /** @type {any} */ ({});
-        const options = /** @type {any} */ ({ mode: "cotnext" });
+        const context = {} as never;
+        const options = { mode: "cotnext" } as never;
 
         assert.throws(
             () => rule.linter(context, options),
@@ -268,8 +273,8 @@ describe("options", () => {
     });
 
     it("throws for a null mode", () => {
-        const context = /** @type {any} */ ({});
-        const options = /** @type {any} */ ({ mode: null });
+        const context = {} as never;
+        const options = { mode: null } as never;
 
         assert.throws(
             () => rule.linter(context, options),
