@@ -85,10 +85,11 @@ The outer state leads; inner content matters only when isolated.
 
 ### Normalization outcome
 
-A pair is the unit of normalization: the decision's target determines both parentheses' width and the spacing on their outer sides.
+A pair is the unit of width normalization.
+The decision's target determines both parentheses' width, and a width rewrite also normalizes the spacing on their outer sides.
 
 A pair is rewritten when it is not already at its target: for a **full** or **half** target, when either parenthesis has the wrong width; for an **either** target, when the two parentheses differ in width (a mixed pair is brought to full width).
-When a pair is rewritten, both parentheses are set to the resolved width (full width for an **either** target), and the spacing on the **outer side** of each parenthesis — left of the opening, right of the closing — is adjusted if that side has a neighbor:
+When a width rewrite occurs, both parentheses are set to the resolved width (full width for an **either** target), and the spacing on the **outer side** of each parenthesis — left of the opening, right of the closing — is adjusted if that side has a neighbor:
 
 - **To full-width**: no transparent characters remain between the parenthesis and its neighbor.
 - **To half-width**: a single U+0020 space separates the parenthesis from its neighbor when they would otherwise abut; existing transparent characters are preserved.
