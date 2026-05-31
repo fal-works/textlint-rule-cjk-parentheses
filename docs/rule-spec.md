@@ -27,9 +27,11 @@ Pairing (§3.2), inner-content classification (§3.4), and neighbor lookup (§3.
 Flattening rules:
 
 - **Container node** (has `children`): recurse into children. Non-child data (URLs, delimiters) is excluded.
-- **`Str`**: contributes its source characters by Unicode code point.
-  When a backslash is immediately followed by an in-scope parenthesis, the two-character source span contributes one opaque placeholder.
-  A backslash not followed by an in-scope parenthesis remains an ordinary source character.
+- **`Str`**: contributes the rendered inline text by Unicode code point, resolving CommonMark backslash escapes against the raw source.
+  A backslash escapes the following character only when that character is ASCII punctuation (the escapable set); the backslash is then consumed and cannot be re-read as the start of another escape.
+  - An escaped **in-scope parenthesis** (`\(` or `\)`) is the author's opt-out: the two-character span contributes one opaque placeholder.
+  - Any other escape contributes the single literal character it denotes (e.g. `\\` contributes one `\`).
+  - A backslash not followed by an escapable character is an ordinary backslash character. In particular, full-width `（）` are not ASCII and are never escaped, so `\（` contributes a literal backslash followed by a real full-width parenthesis.
 - **`Break`**, and line terminators (U+000A, U+000D, U+2028, U+2029): run boundaries.
 - **All other leaf nodes** (`Code`, `Image`, `Html`, …): **opaque**, each contributing one opaque placeholder. Source text, alt text, and URLs are not inspected.
 
@@ -125,6 +127,13 @@ Exceptions to space insertion (to-half-width only):
 - Before `(`: left neighbor has Unicode `General_Category` `Ps` (open punctuation) or `Pi` (initial quote).
 - After `)`: right neighbor has `General_Category` `Pe` (close punctuation) or `Pf` (final quote), or is one of `. , ; : ! ?` or `…` (U+2026).
 - Straight quotes `" '`: either side.
+
+### 5.1.1 Escape preservation
+
+A fix never turns a literal backslash into an escape.
+When a parenthesis is set to half-width `(` or `)` and the source places an odd-length run of backslashes immediately before it, one backslash is prepended to the replacement.
+This keeps the run even, so the literal backslash is preserved and the parenthesis remains a real (non-escaped) parenthesis rather than being silently opted out (§3.1).
+For example, `version（2.0\）` is fixed to `version (2.0\\)`, not `version (2.0\)`.
 
 ### 5.2 The `either` cell
 

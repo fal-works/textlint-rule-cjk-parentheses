@@ -67,6 +67,9 @@ const BASE_CJK_PATTERN = /[\p{scx=Han}\p{scx=Hiragana}\p{scx=Katakana}！-｠￠
 const OPENING_SPACE_EXCEPTION_PATTERN = /[\p{gc=Ps}\p{gc=Pi}]/u;
 const CLOSING_SPACE_EXCEPTION_PATTERN = /[\p{gc=Pe}\p{gc=Pf}]/u;
 
+/** Characters a CommonMark backslash escape may target: the ASCII punctuation set. */
+const ESCAPABLE_PATTERN = /[!-\/:-@[-`{-~]/;
+
 const OPAQUE_PLACEHOLDER = "\uFFFC";
 const FULLWIDTH_OPEN = "（";
 const FULLWIDTH_CLOSE = "）";
@@ -204,20 +207,36 @@ function buildRuns(block: TxtNode, context: RuleContextSubset): VirtualRun[] {
                 const char = nextCodePoint(source, localIndex);
                 if (char === undefined) break;
 
-                const sourceIndex = node.range[0] + localIndex;
-                const sourceEnd = sourceIndex + char.length;
-                const nextChar = char === "\\" ? nextCodePoint(source, localIndex + char.length) : undefined;
+                const sourceStart = node.range[0] + localIndex;
+                const sourceEnd = sourceStart + char.length;
 
-                if (nextChar !== undefined && isInScopeParenthesis(nextChar)) {
-                    appendToken(OPAQUE_PLACEHOLDER, sourceIndex, sourceEnd + nextChar.length, ancestors);
-                    localIndex += char.length + nextChar.length;
+                if (char === "\\") {
+                    const escaped = nextCodePoint(source, localIndex + char.length);
+                    if (escaped !== undefined && ESCAPABLE_PATTERN.test(escaped)) {
+                        const escapedEnd = sourceEnd + escaped.length;
+                        if (isInScopeParenthesis(escaped)) {
+                            // An escaped target parenthesis is the author's opt-out:
+                            // the two-character span is protected from pairing and fixing.
+                            appendToken(OPAQUE_PLACEHOLDER, sourceStart, escapedEnd, ancestors);
+                        } else {
+                            // Any other escape (including `\\`) consumes the backslash and
+                            // contributes the single literal character it denotes, so the
+                            // escaped character cannot itself begin a new escape.
+                            appendToken(escaped, sourceStart, escapedEnd, ancestors);
+                        }
+                        localIndex += char.length + escaped.length;
+                        continue;
+                    }
+                    // A backslash that escapes nothing is an ordinary character.
+                    appendToken("\\", sourceStart, sourceEnd, ancestors);
+                    localIndex += char.length;
                     continue;
                 }
 
                 if (isRunBoundary(char)) {
                     splitRun();
                 } else {
-                    appendToken(char, sourceIndex, sourceEnd, ancestors);
+                    appendToken(char, sourceStart, sourceEnd, ancestors);
                 }
                 localIndex += char.length;
             }
@@ -522,6 +541,28 @@ interface CreateFixParams {
     targetByTokenId: ReadonlyMap<number, string>;
 }
 
+/** Whether the source holds an odd-length run of backslashes ending immediately before `index`. */
+function precededByOddBackslashRun(source: string, index: number): boolean {
+    let count = 0;
+    for (let cursor = index - 1; cursor >= 0 && source[cursor] === "\\"; cursor -= 1) {
+        count += 1;
+    }
+    return count % 2 === 1;
+}
+
+/**
+ * Guards a fix against accidentally escaping the parenthesis it writes. When the replacement
+ * starts with a half-width `(`/`)` placed directly after an odd backslash run, one more backslash
+ * is prepended so the run stays even: the literal backslash is preserved and the parenthesis
+ * remains a real, non-escaped one.
+ */
+function guardAgainstEscape(replacement: string, source: string, rangeStart: number): string {
+    const firstChar = replacement[0];
+    if (firstChar !== HALFWIDTH_OPEN && firstChar !== HALFWIDTH_CLOSE) return replacement;
+    if (!precededByOddBackslashRun(source, rangeStart)) return replacement;
+    return `\\${replacement}`;
+}
+
 function createFix({
     block,
     run,
@@ -553,7 +594,9 @@ function createFix({
         replacement: targetChar,
     };
 
-    return fixer.replaceTextRange(relativeToBlock(block, [rangeStart, rangeEnd]), replacement);
+    const guardedReplacement = guardAgainstEscape(replacement, source, rangeStart);
+
+    return fixer.replaceTextRange(relativeToBlock(block, [rangeStart, rangeEnd]), guardedReplacement);
 }
 
 interface CreateReportsForPairParams {

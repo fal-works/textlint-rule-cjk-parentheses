@@ -46,7 +46,10 @@ tester.run("cjk-parentheses", rule, {
         "(`日本語`)",
         "(日本語\n)",
         "名称\\(めいしょう\\)",
-        "version\\（2.0\\）",
+        // A backslash before a half-width parenthesis escapes it, so the pair is excluded.
+        "名称\\(めいしょう\\) と \\(text\\)",
+        // An escaped backslash before an already-correct pair leaves nothing to fix.
+        "文字\\\\（漢字）",
         {
             text: "これはソース（source）です",
             options: { mode: "context" },
@@ -264,6 +267,30 @@ tester.run("cjk-parentheses", rule, {
             text: "名称\\(めいしょう\\) と 名称(めいしょう)",
             output: "名称\\(めいしょう\\) と 名称（めいしょう）",
             errors: [e(FULLWIDTH_MESSAGE), e(FULLWIDTH_MESSAGE)],
+        },
+        {
+            // `\\` is an escaped backslash, so the following `(` is a real parenthesis,
+            // not an escaped one: the pair is normalized rather than excluded.
+            text: "名称\\\\(めいしょう\\\\)",
+            output: "名称\\\\（めいしょう\\\\）",
+            errors: [e(FULLWIDTH_MESSAGE), e(FULLWIDTH_MESSAGE)],
+        },
+        {
+            // A backslash never escapes a full-width parenthesis (it is not ASCII), so `（）`
+            // are real parentheses and are normalized.
+            text: "version\\（2.0\\）",
+            output: "version\\ (2.0\\\\)",
+            errors: [e(HALFWIDTH_MESSAGE), e(HALFWIDTH_MESSAGE)],
+        },
+        {
+            // The literal backslash before the closing parenthesis must survive the fix: writing
+            // a bare `\)` would escape the parenthesis (opting it out) and erase the backslash.
+            text: "version（2.0\\）",
+            output: "version (2.0\\\\)",
+            errors: [
+                e(HALFWIDTH_MESSAGE, { line: 1, column: 8, range: [7, 8] }),
+                e(HALFWIDTH_MESSAGE, { line: 1, column: 13, range: [12, 13] }),
+            ],
         },
     ],
 });
