@@ -4,9 +4,9 @@ const TextLintTester = TextLintTesterModule.default ?? TextLintTesterModule;
 
 import rule from "../src/index.js";
 
-const FULLWIDTH_MESSAGE = "この文脈では全角括弧（）を使用してください。";
-const HALFWIDTH_MESSAGE = "この文脈では半角括弧()を使用してください。";
-const EITHER_WIDTH_MESSAGE = "括弧の幅を全角（）または半角()に統一してください。";
+const FULLWIDTH_MESSAGE = "Use full-width parentheses （） here.";
+const HALFWIDTH_MESSAGE = "Use half-width parentheses () here.";
+const EITHER_WIDTH_MESSAGE = "Unify the parenthesis width to either full-width （） or half-width ().";
 
 const NBSP = "\u00A0";
 
