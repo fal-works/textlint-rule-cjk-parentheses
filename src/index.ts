@@ -108,6 +108,12 @@ function isRunBoundary(char: string): boolean {
     return char === "\n" || char === "\r" || char === "\u2028" || char === "\u2029";
 }
 
+function nextCodePoint(source: string, index: number): string | undefined {
+    if (index >= source.length) return undefined;
+    const codePoint = source.codePointAt(index);
+    return codePoint === undefined ? undefined : String.fromCodePoint(codePoint);
+}
+
 function isTransparent(char: string): boolean {
     return TRANSPARENT_CHARS.has(char);
 }
@@ -193,15 +199,27 @@ function buildRuns(block: TxtNode, context: RuleContextSubset): VirtualRun[] {
     function visit(node: TxtNode, ancestors: readonly SourceRange[]): void {
         if (node.type === Syntax.Str) {
             const source = getSource(node);
-            let sourceIndex = node.range[0];
-            for (const char of source) {
+            let localIndex = 0;
+            while (localIndex < source.length) {
+                const char = nextCodePoint(source, localIndex);
+                if (char === undefined) break;
+
+                const sourceIndex = node.range[0] + localIndex;
                 const sourceEnd = sourceIndex + char.length;
+                const nextChar = char === "\\" ? nextCodePoint(source, localIndex + char.length) : undefined;
+
+                if (nextChar !== undefined && isInScopeParenthesis(nextChar)) {
+                    appendToken(OPAQUE_PLACEHOLDER, sourceIndex, sourceEnd + nextChar.length, ancestors);
+                    localIndex += char.length + nextChar.length;
+                    continue;
+                }
+
                 if (isRunBoundary(char)) {
                     splitRun();
                 } else {
                     appendToken(char, sourceIndex, sourceEnd, ancestors);
                 }
-                sourceIndex = sourceEnd;
+                localIndex += char.length;
             }
             return;
         }

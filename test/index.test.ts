@@ -45,6 +45,8 @@ tester.run("cjk-parentheses", rule, {
         "(![日本語](image.png))",
         "(`日本語`)",
         "(日本語\n)",
+        "名称\\(めいしょう\\)",
+        "version\\（2.0\\）",
         {
             text: "これはソース（source）です",
             options: { mode: "context" },
@@ -257,6 +259,11 @@ tester.run("cjk-parentheses", rule, {
                 e(FULLWIDTH_MESSAGE, { line: 3, column: 3, range: [7, 8] }),
                 e(FULLWIDTH_MESSAGE, { line: 3, column: 9, range: [13, 14] }),
             ],
+        },
+        {
+            text: "名称\\(めいしょう\\) と 名称(めいしょう)",
+            output: "名称\\(めいしょう\\) と 名称（めいしょう）",
+            errors: [e(FULLWIDTH_MESSAGE), e(FULLWIDTH_MESSAGE)],
         },
     ],
 });

@@ -11,21 +11,27 @@ The decision for each pair — `full`, `half`, or `either` — is determined by 
 
 - Applies to inline content in `Paragraph`, `Header`, and `TableCell` blocks.
 - Targets round parentheses only: `( )` and `（ ）`.
+- Backslash-escaped target parentheses in `Str` source are excluded from pairing and fixing.
 - Every diagnostic carries an autofix.
 
 ## 3. Definitions
 
 ### 3.1 Virtual string and runs
 
-From each block container, the inline subtree is flattened into a character sequence, the **virtual string**, which line breaks split into **runs**.
+From each block container, the inline subtree is flattened into a sequence of virtual characters, the **virtual string**.
+A virtual character is either a source character or an **opaque placeholder** for a protected source span.
+Opaque placeholders are non-transparent (§3.5), non-CJK (§3.3), and not parentheses.
+Line breaks split the virtual string into **runs**.
 Pairing (§3.2), inner-content classification (§3.4), and neighbor lookup (§3.5) never cross a run boundary.
 
 Flattening rules:
 
 - **Container node** (has `children`): recurse into children. Non-child data (URLs, delimiters) is excluded.
-- **`Str`**: contributes its source characters.
+- **`Str`**: contributes its source characters by Unicode code point.
+  When a backslash is immediately followed by an in-scope parenthesis, the two-character source span contributes one opaque placeholder.
+  A backslash not followed by an in-scope parenthesis remains an ordinary source character.
 - **`Break`**, and line terminators (U+000A, U+000D, U+2028, U+2029): run boundaries.
-- **All other leaf nodes** (`Code`, `Image`, `Html`, …): **opaque**, each contributing a single non-transparent, non-CJK placeholder. Source text, alt text, and URLs are not inspected.
+- **All other leaf nodes** (`Code`, `Image`, `Html`, …): **opaque**, each contributing one opaque placeholder. Source text, alt text, and URLs are not inspected.
 
 ### 3.2 Pairing
 
@@ -46,7 +52,7 @@ The class is defined by:
 
 `Script_Extensions` covers Han, Hiragana, and Katakana, including half-width katakana (U+FF66–FF9F) and shared CJK punctuation (`ー` `・` `々` `、` `。` etc.).
 The literal ranges add full-width `Common` characters: U+FF01–FF60 (punctuation and alphanumerics) and U+FFE0–FFE6 (signs).
-ASCII characters, `…` `–` `—`, and opaque-node placeholders (§3.1) are not in the base class.
+ASCII characters, `…` `–` `—`, and opaque placeholders (§3.1) are not in the base class.
 
 A character counts as **CJK** iff it is in the base class and is not an in-scope parenthesis:
 
@@ -136,3 +142,4 @@ A mixed-width pair is resolved to full-width: only the differing parenthesis is 
 | `version (2.0)` | non-CJK | none | `version (2.0)` | `version (2.0)` |
 | `(注)` (alone) | isolated | CJK | `（注）` | `（注）` |
 | `(123)` (alone) | isolated | none | `(123)` | `(123)` |
+| `名称\(めいしょう\)` | excluded | excluded | accepted as is | accepted as is |
