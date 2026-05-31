@@ -1,7 +1,7 @@
 {
   "name": "@fal-works/textlint-rule-cjk-parentheses",
   "version": "0.1.0",
-  "description": "textlint rule: use （） for CJK content, () for non-CJK content",
+  "description": "textlint rule: normalize round parentheses by CJK content and/or context",
   "keywords": [
     "textlintrule",
     "cjk",
